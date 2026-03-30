@@ -1,0 +1,19 @@
+# Large media files
+backend/clips/
+backend/uploads/
+backend/downloads/
+backend/outputs/
+backend/test.db
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment variables (sensitive)
+.env
+
+# Node modules
+frontend/node_modules/
+frontend/build/

@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: enocom-backend
+    runtime: python
+    buildCommand: |
+      chmod +x backend/install_ffmpeg.sh
+      ./backend/install_ffmpeg.sh
+      pip install -r backend/requirements.txt
+    startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite:///./test.db   # Render provides ephemeral disk; for production use PostgreSQL
+      - key: PEXELS_API_KEY
+        sync: false
+      - key: PIXABAY_API_KEY
+        sync: false
