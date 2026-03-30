@@ -7,7 +7,7 @@ from ..database import SessionLocal
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-model = whisper.load_model("base")
+model = whisper.load_model("tiny")   # changed from "base" to reduce memory
 
 def transcribe_audio_and_save(video_id: int, audio_path: str):
     print(f"DEBUG: Starting transcription for video_id={video_id}, audio_path={audio_path}", flush=True)
