@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Caption } from '../types';
 import { getCaptions, updateCaption, splitCaption, mergeCaptions, deleteCaption } from '../services/api';
 
@@ -12,7 +12,7 @@ const CaptionTimeline: React.FC<CaptionTimelineProps> = ({ videoId }) => {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editText, setEditText] = useState('');
 
-  const fetchCaptions = async () => {
+  const fetchCaptions = useCallback(async () => {
     setLoading(true);
     try {
       const res = await getCaptions(videoId);
@@ -22,11 +22,11 @@ const CaptionTimeline: React.FC<CaptionTimelineProps> = ({ videoId }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [videoId]);
 
   useEffect(() => {
     fetchCaptions();
-  }, [videoId]);
+  }, [fetchCaptions]);
 
   const handleUpdate = async (id: number) => {
     if (!editText.trim()) return;
