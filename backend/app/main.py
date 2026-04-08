@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware   # added for CORS
+from fastapi.middleware.cors import CORSMiddleware
 from .database import engine, Base
 from . import models
 from .routers import videos, captions, styles, clips, assembly
@@ -11,7 +11,11 @@ app = FastAPI(title="ENOCOM Video Editor", version="0.1.0")
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # frontend URL
+    allow_origins=[
+        "http://localhost:3000",                                           # local development
+        "https://frontend-g8yy3daut-ochandaenock-1059s-projects.vercel.app",
+        "https://frontend-eight-jade-2pxmmq7cq4.vercel.app"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
