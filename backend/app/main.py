@@ -14,7 +14,9 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",                                           # local development
         "https://frontend-g8yy3daut-ochandaenock-1059s-projects.vercel.app",
-        "https://frontend-eight-jade-2pxmmq7cq4.vercel.app"
+        "https://frontend-eight-jade-2pxmmq7cq4.vercel.app",
+        "https://eno-com.onrender.com",                                    # allow Swagger on the backend itself
+        "*"                                                               # temporary for testing
     ],
     allow_credentials=True,
     allow_methods=["*"],
