@@ -32,3 +32,7 @@ export const updateStyle = (videoId: number, style: any) => api.post(`/styles/${
 // Assembly with export options
 export const assembleVideo = (videoId: number, options?: { resolution?: string; quality?: string; format?: string }) =>
   api.post(`/assembly/${videoId}`, options || {});
+
+// Audio for waveform
+export const getAudioUrl = (videoId: number) => api.get(`/videos/${videoId}/audio`, { responseType: 'blob' });
+export const getAudioStreamUrl = (videoId: number) => `${API_BASE}/videos/${videoId}/audio`;

@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Caption } from '../types';
 import { getCaptions, updateCaption, splitCaption, mergeCaptions, deleteCaption } from '../services/api';
+import { getAudioStreamUrl } from '../services/api';
 import VisualTimeline from './VisualTimeline';
+import AudioWaveform from './AudioWaveform';
 
 interface CaptionTimelineProps {
   videoId: number;
@@ -13,6 +15,7 @@ const CaptionTimeline: React.FC<CaptionTimelineProps> = ({ videoId }) => {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editText, setEditText] = useState('');
   const [videoDuration, setVideoDuration] = useState(300); // default 5 min, will update from captions
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
 
   const fetchCaptions = useCallback(async () => {
     setLoading(true);
@@ -33,6 +36,13 @@ const CaptionTimeline: React.FC<CaptionTimelineProps> = ({ videoId }) => {
   useEffect(() => {
     fetchCaptions();
   }, [fetchCaptions]);
+
+  // Set audio URL for waveform
+  useEffect(() => {
+    if (videoId) {
+      setAudioUrl(getAudioStreamUrl(videoId));
+    }
+  }, [videoId]);
 
   const handleUpdate = async (id: number) => {
     if (!editText.trim()) return;
@@ -121,6 +131,17 @@ const CaptionTimeline: React.FC<CaptionTimelineProps> = ({ videoId }) => {
             onCaptionClick={handleCaptionClick}
             onCaptionResize={handleCaptionResize}
             onCaptionDrag={handleCaptionDrag}
+          />
+        </div>
+      )}
+      
+      {/* Audio Waveform */}
+      {audioUrl && (
+        <div className="mb-4">
+          <label className="block text-sm text-gray-400 mb-1">Audio Waveform</label>
+          <AudioWaveform 
+            audioUrl={audioUrl} 
+            onSeek={(time) => console.log('Seek to', time)} 
           />
         </div>
       )}

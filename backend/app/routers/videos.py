@@ -2,6 +2,7 @@ import os
 import shutil
 import uuid
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, BackgroundTasks
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from .. import models, schemas
 from ..database import get_db
@@ -40,6 +41,7 @@ async def upload_video(
         user_id=1,
         name=file.filename,
         file_path=video_path,
+        audio_path=audio_path,  # <-- added
     )
     db.add(db_video)
     db.commit()
@@ -51,3 +53,15 @@ async def upload_video(
         print("DEBUG: Background task added", flush=True)
 
     return {"video_id": db_video.id, "filename": file.filename, "audio_path": audio_path}
+
+# Audio endpoint for waveform visualization
+@router.get("/{video_id}/audio")
+def get_audio(video_id: int, db: Session = Depends(get_db)):
+    video = db.query(models.Video).filter(models.Video.id == video_id).first()
+    if not video or not video.audio_path:
+        raise HTTPException(status_code=404, detail="Audio file not found")
+    
+    if not os.path.exists(video.audio_path):
+        raise HTTPException(status_code=404, detail="Audio file missing")
+    
+    return FileResponse(video.audio_path, media_type="audio/wav", filename="audio.wav")

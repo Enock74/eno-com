@@ -17,6 +17,7 @@ class Video(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     name = Column(String)
     file_path = Column(String)
+    audio_path = Column(String, nullable=True)  # <-- added
     uploaded_at = Column(DateTime, default=datetime.utcnow)
     user = relationship("User", back_populates="videos")
     captions = relationship("Caption", back_populates="video")
