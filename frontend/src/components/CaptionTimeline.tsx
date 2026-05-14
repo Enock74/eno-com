@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Caption } from '../types';
 import { getCaptions, updateCaption, splitCaption, mergeCaptions, deleteCaption } from '../services/api';
+import VisualTimeline from './VisualTimeline';
 
 interface CaptionTimelineProps {
   videoId: number;
@@ -11,12 +12,17 @@ const CaptionTimeline: React.FC<CaptionTimelineProps> = ({ videoId }) => {
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editText, setEditText] = useState('');
+  const [videoDuration, setVideoDuration] = useState(300); // default 5 min, will update from captions
 
   const fetchCaptions = useCallback(async () => {
     setLoading(true);
     try {
       const res = await getCaptions(videoId);
       setCaptions(res.data);
+      if (res.data.length > 0) {
+        // Set duration to the end time of the last caption
+        setVideoDuration(res.data[res.data.length - 1].end_time);
+      }
     } catch (err) {
       console.error('Failed to fetch captions', err);
     } finally {
@@ -73,11 +79,53 @@ const CaptionTimeline: React.FC<CaptionTimelineProps> = ({ videoId }) => {
     }
   };
 
+  const handleCaptionResize = async (captionId: number, newStart: number, newEnd: number) => {
+    try {
+      await updateCaption(captionId, { start_time: newStart, end_time: newEnd });
+      fetchCaptions();
+    } catch (err) {
+      console.error('Resize failed', err);
+    }
+  };
+
+  const handleCaptionDrag = async (captionId: number, newStart: number) => {
+    try {
+      const cap = captions.find(c => c.id === captionId);
+      if (cap) {
+        const duration = cap.end_time - cap.start_time;
+        await updateCaption(captionId, { start_time: newStart, end_time: newStart + duration });
+        fetchCaptions();
+      }
+    } catch (err) {
+      console.error('Drag failed', err);
+    }
+  };
+
+  const handleCaptionClick = (caption: Caption) => {
+    setEditingId(caption.id);
+    setEditText(caption.text);
+  };
+
   if (loading) return <div style={{ textAlign: 'center', padding: '2rem', color: '#9ca3af' }}>Loading captions...</div>;
 
   return (
     <div className="card">
       <h2 className="card-title">Caption Timeline</h2>
+      
+      {/* Visual Timeline */}
+      {captions.length > 0 && (
+        <div style={{ marginBottom: '1.5rem' }}>
+          <VisualTimeline
+            captions={captions}
+            videoDuration={videoDuration}
+            onCaptionClick={handleCaptionClick}
+            onCaptionResize={handleCaptionResize}
+            onCaptionDrag={handleCaptionDrag}
+          />
+        </div>
+      )}
+      
+      {/* Existing list view */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
         {captions.map((cap, idx) => (
           <div key={cap.id} className="caption-item">
