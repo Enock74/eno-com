@@ -32,13 +32,25 @@ const AudioWaveform: React.FC<AudioWaveformProps> = ({ audioUrl, onReady, onSeek
       if (onReady) onReady();
     });
 
-    wavesurferRef.current.on('seek', () => {
-      if (onSeek && wavesurferRef.current) {
-        onSeek(wavesurferRef.current.getCurrentTime());
-      }
-    });
+    // Use click handler instead of 'seek' event
+    const handleClick = (e: MouseEvent) => {
+      if (!containerRef.current || !wavesurferRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const percent = Math.max(0, Math.min(1, x / rect.width));
+      const duration = wavesurferRef.current.getDuration();
+      const time = percent * duration;
+      if (onSeek) onSeek(time);
+      // Also seek the waveform to that position
+      wavesurferRef.current.seekTo(percent);
+    };
+
+    containerRef.current.addEventListener('click', handleClick);
 
     return () => {
+      if (containerRef.current) {
+        containerRef.current.removeEventListener('click', handleClick);
+      }
       if (wavesurferRef.current) {
         wavesurferRef.current.destroy();
       }
