@@ -7,38 +7,84 @@ import { getCaptions } from './services/api';
 import './dark-theme.css';
 
 function App() {
-  const [videoId, setVideoId] = useState<number | null>(null);
+  // Read videoId from URL if present
+  const getVideoIdFromUrl = () => {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('videoId');
+    return id ? parseInt(id) : null;
+  };
+
+  const [videoId, setVideoId] = useState<number | null>(getVideoIdFromUrl());
   const [captionsReady, setCaptionsReady] = useState(false);
   const [polling, setPolling] = useState(false);
 
-  useEffect(() => {
-    if (!videoId) return;
-    setCaptionsReady(false);
-    setPolling(true);
+  // Update URL when videoId changes
+  const updateVideoId = (id: number | null) => {
+    setVideoId(id);
+    if (id) {
+      window.history.pushState({}, '', `?videoId=${id}`);
+    } else {
+      window.history.pushState({}, '', window.location.pathname);
+    }
+  };
 
-    let attempts = 0;
-    const maxAttempts = 300; // 300 * 5 seconds = 1500 seconds = 25 minutes max wait
-    const pollInterval = setInterval(async () => {
-      attempts++;
+  useEffect(() => {
+    if (!videoId) {
+      setCaptionsReady(false);
+      return;
+    }
+    
+    // Check if captions already exist
+    const checkCaptions = async () => {
       try {
         const res = await getCaptions(videoId);
         if (res.data && res.data.length > 0) {
-          // Captions are ready
-          clearInterval(pollInterval);
           setCaptionsReady(true);
           setPolling(false);
-        } else if (attempts >= maxAttempts) {
-          // Timeout – stop polling
-          clearInterval(pollInterval);
-          setPolling(false);
-          alert('Transcription is taking longer than expected. Please refresh the page later.');
+          return true;
         }
       } catch (err) {
-        console.error('Polling error', err);
+        console.error('Error checking captions', err);
       }
-    }, 5000); // check every 5 seconds
+      return false;
+    };
 
-    return () => clearInterval(pollInterval);
+    const init = async () => {
+      const hasCaptions = await checkCaptions();
+      if (hasCaptions) {
+        setCaptionsReady(true);
+        setPolling(false);
+        return;
+      }
+
+      // No captions yet – start polling
+      setCaptionsReady(false);
+      setPolling(true);
+
+      let attempts = 0;
+      const maxAttempts = 300; // 300 * 5 seconds = 25 minutes max wait
+      const pollInterval = setInterval(async () => {
+        attempts++;
+        try {
+          const res = await getCaptions(videoId);
+          if (res.data && res.data.length > 0) {
+            clearInterval(pollInterval);
+            setCaptionsReady(true);
+            setPolling(false);
+          } else if (attempts >= maxAttempts) {
+            clearInterval(pollInterval);
+            setPolling(false);
+            alert('Transcription is taking longer than expected. Please refresh the page later.');
+          }
+        } catch (err) {
+          console.error('Polling error', err);
+        }
+      }, 5000);
+
+      return () => clearInterval(pollInterval);
+    };
+
+    init();
   }, [videoId]);
 
   return (
@@ -55,7 +101,7 @@ function App() {
       }}>
         ENOCOM Video Editor
       </h1>
-      <VideoUpload onUploadSuccess={setVideoId} />
+      <VideoUpload onUploadSuccess={updateVideoId} />
       {videoId && (
         <>
           {polling && (
