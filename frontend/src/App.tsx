@@ -17,7 +17,7 @@ function App() {
     setPolling(true);
 
     let attempts = 0;
-    const maxAttempts = 30; // 30 * 2 seconds = 60 seconds max wait
+    const maxAttempts = 300; // 300 * 5 seconds = 1500 seconds = 25 minutes max wait
     const pollInterval = setInterval(async () => {
       attempts++;
       try {
@@ -36,7 +36,7 @@ function App() {
       } catch (err) {
         console.error('Polling error', err);
       }
-    }, 2000); // check every 2 seconds
+    }, 5000); // check every 5 seconds
 
     return () => clearInterval(pollInterval);
   }, [videoId]);

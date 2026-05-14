@@ -48,7 +48,33 @@ def trim_clip(input_path, output_path, duration):
     ]
     subprocess.run(cmd, check=True, capture_output=True)
 
-def assemble_video_from_captions(video_id: int, db: Session):
+def get_ffmpeg_params(resolution: str, quality: str, output_format: str):
+    # Resolution mapping
+    res_map = {
+        "720p": "1280:720",
+        "1080p": "1920:1080",
+        "4k": "3840:2160"
+    }
+    scale = res_map.get(resolution, "1920:1080")
+    
+    # Quality/bitrate mapping
+    quality_map = {
+        "low": "1M",
+        "medium": "2.5M",
+        "high": "5M"
+    }
+    bitrate = quality_map.get(quality, "2.5M")
+    
+    # Format extension
+    ext = "mp4" if output_format == "mp4" else "mov"
+    
+    return scale, bitrate, ext
+
+def assemble_video_from_captions(video_id: int, db: Session, options=None):
+    if options is None:
+        from ..routers.assembly import ExportOptions
+        options = ExportOptions()
+    
     video = db.query(models.Video).filter(models.Video.id == video_id).first()
     if not video:
         raise ValueError(f"Video with id {video_id} not found")
@@ -80,7 +106,7 @@ def assemble_video_from_captions(video_id: int, db: Session):
             cmd = [
                 'ffmpeg', '-y', '-loop', '1', '-i', local_path,
                 '-t', str(duration), '-c:v', 'libx264',
-                '-vf', 'scale=1920:1080',  # optional
+                '-vf', 'scale=1920:1080',
                 temp_video
             ]
             subprocess.run(cmd, check=True, capture_output=True)
@@ -101,16 +127,18 @@ def assemble_video_from_captions(video_id: int, db: Session):
     subtitle_file = os.path.join(DOWNLOAD_FOLDER, f"{uuid.uuid4()}.srt")
     create_subtitle_file(captions, subtitle_file)
     
-    output_filename = f"outputs/{uuid.uuid4()}.mp4"
+    # Use export options for FFmpeg parameters
+    scale, bitrate, ext = get_ffmpeg_params(options.resolution, options.quality, options.format)
+    output_filename = f"outputs/{uuid.uuid4()}.{ext}"
     os.makedirs("outputs", exist_ok=True)
     
     cmd = [
         'ffmpeg', '-y',
         '-f', 'concat', '-safe', '0', '-i', concat_file.name,
         '-i', subtitle_file,
-        '-c:v', 'libx264', '-preset', 'medium',
-        '-c:a', 'aac',
-        '-vf', f"subtitles={subtitle_file.replace('\\', '/')}",
+        '-c:v', 'libx264', '-preset', 'medium', '-b:v', bitrate,
+        '-vf', f"scale={scale},subtitles={subtitle_file.replace('\\', '/')}",
+        '-c:a', 'aac', '-b:a', '128k',
         output_filename
     ]
     subprocess.run(cmd, check=True, capture_output=True)

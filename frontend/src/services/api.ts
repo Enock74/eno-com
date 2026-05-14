@@ -29,5 +29,6 @@ export const deleteCaption = (captionId: number) => api.delete(`/captions/${capt
 export const getStyle = (videoId: number) => api.get(`/styles/${videoId}`);
 export const updateStyle = (videoId: number, style: any) => api.post(`/styles/${videoId}`, style);
 
-// Assembly
-export const assembleVideo = (videoId: number) => api.post(`/assembly/${videoId}`);
+// Assembly with export options
+export const assembleVideo = (videoId: number, options?: { resolution?: string; quality?: string; format?: string }) =>
+  api.post(`/assembly/${videoId}`, options || {});

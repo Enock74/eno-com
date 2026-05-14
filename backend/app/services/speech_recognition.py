@@ -1,4 +1,5 @@
 import os
+import whisper
 import requests
 import time
 from sqlalchemy.orm import Session
@@ -9,89 +10,123 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Determine which transcription method to use
+# Use AssemblyAI if API key is set AND we're on Render (or anywhere with internet)
 ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")
-ASSEMBLYAI_UPLOAD_URL = "https://api.assemblyai.com/v2/upload"
-ASSEMBLYAI_TRANSCRIPT_URL = "https://api.assemblyai.com/v2/transcript"
+USE_ASSEMBLYAI = ASSEMBLYAI_API_KEY is not None and os.getenv("RENDER", False) == "true"
 
-def transcribe_audio_and_save(video_id: int, audio_path: str):
-    if not ASSEMBLYAI_API_KEY:
-        logger.error("ASSEMBLYAI_API_KEY not set. Cannot transcribe.")
-        return
+# Whisper model (lazy loaded for local use)
+_whisper_model = None
 
-    print(f"DEBUG: Starting AssemblyAI transcription for video {video_id}, audio {audio_path}")
+def get_whisper_model():
+    global _whisper_model
+    if _whisper_model is None:
+        logger.info("Loading Whisper tiny model...")
+        _whisper_model = whisper.load_model("tiny")
+    return _whisper_model
+
+def transcribe_with_whisper(video_id: int, audio_path: str, db: Session):
+    """Use local Whisper (for local development)"""
+    print(f"DEBUG: Using Whisper for video {video_id}")
+    model = get_whisper_model()
+    result = model.transcribe(audio_path, word_timestamps=True)
+    segments = result["segments"]
     
-    # 1. Upload the audio file
+    for seg in segments:
+        caption = models.Caption(
+            video_id=video_id,
+            start_time=seg["start"],
+            end_time=seg["end"],
+            text=seg["text"].strip(),
+        )
+        db.add(caption)
+    db.commit()
+    print(f"DEBUG: Whisper saved {len(segments)} captions for video {video_id}")
+
+def transcribe_with_assemblyai(video_id: int, audio_path: str, db: Session):
+    """Use AssemblyAI API (for deployed backend)"""
+    print(f"DEBUG: Using AssemblyAI for video {video_id}")
+    
     headers = {"authorization": ASSEMBLYAI_API_KEY}
+    
+    # 1. Upload
+    print("DEBUG: Uploading to AssemblyAI...")
     with open(audio_path, "rb") as f:
-        upload_response = requests.post(ASSEMBLYAI_UPLOAD_URL, headers=headers, data=f)
+        upload_response = requests.post(
+            "https://api.assemblyai.com/v2/upload",
+            headers=headers,
+            data=f
+        )
     if upload_response.status_code != 200:
         print(f"Upload failed: {upload_response.text}")
         return
     upload_url = upload_response.json()["upload_url"]
     
-    # 2. Request transcription (with word timestamps and paragraphs for sentence grouping)
-    transcript_request = {
-        "audio_url": upload_url,
-        "word_boost": [],
-        "boost_param": "high",
-        "punctuate": True,
-        "format_text": True,
-        "auto_chapters": False,
-        "paragraphs": True  # groups words into sentences
-    }
-    transcript_response = requests.post(ASSEMBLYAI_TRANSCRIPT_URL, json=transcript_request, headers=headers)
+    # 2. Request transcription
+    transcript_response = requests.post(
+        "https://api.assemblyai.com/v2/transcript",
+        json={"audio_url": upload_url, "punctuate": True, "format_text": True},
+        headers=headers
+    )
     if transcript_response.status_code != 200:
-        print(f"Transcription request failed: {transcript_response.text}")
+        print(f"Transcript request failed: {transcript_response.text}")
         return
     transcript_id = transcript_response.json()["id"]
     
-    # 3. Poll until complete
+    # 3. Poll for completion
+    print("DEBUG: Polling AssemblyAI...")
     while True:
-        polling_response = requests.get(f"{ASSEMBLYAI_TRANSCRIPT_URL}/{transcript_id}", headers=headers)
-        status = polling_response.json()["status"]
+        polling = requests.get(
+            f"https://api.assemblyai.com/v2/transcript/{transcript_id}",
+            headers=headers
+        )
+        status = polling.json()["status"]
         if status == "completed":
             break
         elif status == "error":
-            error = polling_response.json().get("error", "Unknown error")
-            print(f"Transcription error: {error}")
+            print(f"Transcription error: {polling.json().get('error')}")
             return
         time.sleep(3)
     
-    # 4. Get results – use paragraphs (sentences) if available, otherwise words
-    data = polling_response.json()
+    # 4. Save results
+    data = polling.json()
     paragraphs = data.get("paragraphs", [])
-    
-    db = SessionLocal()
-    try:
-        if paragraphs:
-            for para in paragraphs:
-                start = para["start"] / 1000.0   # convert ms to seconds
-                end = para["end"] / 1000.0
-                text = para["text"].strip()
-                if not text:
-                    continue
-                caption = models.Caption(
-                    video_id=video_id,
-                    start_time=start,
-                    end_time=end,
-                    text=text
-                )
-                db.add(caption)
-        else:
-            # Fallback: use full transcript as a single caption
-            full_text = data["text"]
-            duration = data["duration"]  # in seconds
+    if paragraphs:
+        for para in paragraphs:
             caption = models.Caption(
                 video_id=video_id,
-                start_time=0.0,
-                end_time=duration,
-                text=full_text
+                start_time=para["start"] / 1000.0,
+                end_time=para["end"] / 1000.0,
+                text=para["text"].strip()
             )
             db.add(caption)
-        db.commit()
-        print(f"DEBUG: Saved {len(paragraphs) if paragraphs else 1} captions for video {video_id}")
+    else:
+        # Fallback to full text
+        caption = models.Caption(
+            video_id=video_id,
+            start_time=0.0,
+            end_time=data["duration"],
+            text=data["text"]
+        )
+        db.add(caption)
+    db.commit()
+    print(f"DEBUG: AssemblyAI saved {len(paragraphs) if paragraphs else 1} captions for video {video_id}")
+
+def transcribe_audio_and_save(video_id: int, audio_path: str):
+    """Main entry point – chooses method based on environment"""
+    abs_audio_path = os.path.abspath(audio_path)
+    if not os.path.exists(abs_audio_path):
+        print(f"ERROR: Audio file not found: {abs_audio_path}")
+        return
+
+    db = SessionLocal()
+    try:
+        if USE_ASSEMBLYAI:
+            transcribe_with_assemblyai(video_id, abs_audio_path, db)
+        else:
+            transcribe_with_whisper(video_id, abs_audio_path, db)
     except Exception as e:
-        print(f"ERROR saving captions: {e}")
+        print(f"ERROR: {e}")
         db.rollback()
     finally:
         db.close()
