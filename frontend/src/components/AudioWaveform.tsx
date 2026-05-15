@@ -14,45 +14,58 @@ const AudioWaveform: React.FC<AudioWaveformProps> = ({ audioUrl, onReady, onSeek
   useEffect(() => {
     if (!containerRef.current || !audioUrl) return;
 
-    wavesurferRef.current = WaveSurfer.create({
-      container: containerRef.current,
-      waveColor: '#4f46e5',
-      progressColor: '#818cf8',
-      cursorColor: '#facc15',
-      barWidth: 2,
-      barRadius: 3,
-      cursorWidth: 2,
-      height: 80,
-      barGap: 1,
-    });
+    let isMounted = true;
+    const container = containerRef.current;
 
-    wavesurferRef.current.load(audioUrl);
+    const initWaveSurfer = async () => {
+      try {
+        wavesurferRef.current = WaveSurfer.create({
+          container: container,
+          waveColor: '#4f46e5',
+          progressColor: '#818cf8',
+          cursorColor: '#facc15',
+          barWidth: 2,
+          barRadius: 3,
+          cursorWidth: 2,
+          height: 80,
+          barGap: 1,
+        });
 
-    wavesurferRef.current.on('ready', () => {
-      if (onReady) onReady();
-    });
+        wavesurferRef.current.load(audioUrl);
 
-    // Use click handler instead of 'seek' event
-    const handleClick = (e: MouseEvent) => {
-      if (!containerRef.current || !wavesurferRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const percent = Math.max(0, Math.min(1, x / rect.width));
-      const duration = wavesurferRef.current.getDuration();
-      const time = percent * duration;
-      if (onSeek) onSeek(time);
-      // Also seek the waveform to that position
-      wavesurferRef.current.seekTo(percent);
+        wavesurferRef.current.on('ready', () => {
+          if (isMounted && onReady) onReady();
+        });
+
+        // Add click handler manually
+        const handleClick = (e: MouseEvent) => {
+          if (!wavesurferRef.current) return;
+          const rect = container.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          const percent = Math.max(0, Math.min(1, x / rect.width));
+          const duration = wavesurferRef.current.getDuration();
+          const time = percent * duration;
+          if (onSeek) onSeek(time);
+          wavesurferRef.current.seekTo(percent);
+        };
+
+        container.addEventListener('click', handleClick);
+      } catch (err) {
+        console.error('WaveSurfer initialization error:', err);
+      }
     };
 
-    containerRef.current.addEventListener('click', handleClick);
+    initWaveSurfer();
 
     return () => {
-      if (containerRef.current) {
-        containerRef.current.removeEventListener('click', handleClick);
-      }
+      isMounted = false;
       if (wavesurferRef.current) {
-        wavesurferRef.current.destroy();
+        try {
+          wavesurferRef.current.destroy();
+        } catch (err) {
+          console.error('WaveSurfer destroy error:', err);
+        }
+        wavesurferRef.current = null;
       }
     };
   }, [audioUrl]);
