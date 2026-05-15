@@ -11,11 +11,12 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ videoId }) => {
   const [resolution, setResolution] = useState('1080p');
   const [quality, setQuality] = useState('medium');
   const [format, setFormat] = useState('mp4');
+  const [useTransition, setUseTransition] = useState(false);
 
   const handleAssemble = async () => {
     setAssembling(true);
     try {
-      const res = await assembleVideo(videoId, { resolution, quality, format });
+      const res = await assembleVideo(videoId, { resolution, quality, format, transition: useTransition });
       setOutputPath(res.data.output_path);
       alert('Assembly complete! Check console for path.');
       console.log('Output video:', res.data.output_path);
@@ -56,6 +57,17 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ videoId }) => {
             <option value="mp4">MP4 (H.264)</option>
             <option value="mov">MOV (QuickTime)</option>
           </select>
+        </div>
+        
+        <div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <input
+              type="checkbox"
+              checked={useTransition}
+              onChange={(e) => setUseTransition(e.target.checked)}
+            />
+            Enable crossfade transitions (0.5s)
+          </label>
         </div>
       </div>
       

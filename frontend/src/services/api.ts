@@ -29,8 +29,8 @@ export const deleteCaption = (captionId: number) => api.delete(`/captions/${capt
 export const getStyle = (videoId: number) => api.get(`/styles/${videoId}`);
 export const updateStyle = (videoId: number, style: any) => api.post(`/styles/${videoId}`, style);
 
-// Assembly with export options
-export const assembleVideo = (videoId: number, options?: { resolution?: string; quality?: string; format?: string }) =>
+// Assembly with export options (including transition)
+export const assembleVideo = (videoId: number, options?: { resolution?: string; quality?: string; format?: string; transition?: boolean }) =>
   api.post(`/assembly/${videoId}`, options || {});
 
 // Audio for waveform
