@@ -9,12 +9,14 @@ interface StylePanelProps {
 const StylePanel: React.FC<StylePanelProps> = ({ videoId }) => {
   const [style, setStyle] = useState<Style | null>(null);
   const [loading, setLoading] = useState(true);
+  const [useKeyframes, setUseKeyframes] = useState(false);
 
   useEffect(() => {
     const fetchStyle = async () => {
       try {
         const res = await getStyle(videoId);
         setStyle(res.data);
+        setUseKeyframes(res.data.use_keyframes || false);
       } catch (err) {
         console.error('Failed to fetch style', err);
       } finally {
@@ -32,7 +34,7 @@ const StylePanel: React.FC<StylePanelProps> = ({ videoId }) => {
   const handleSave = async () => {
     if (!style) return;
     try {
-      await updateStyle(videoId, style);
+      await updateStyle(videoId, { ...style, use_keyframes: useKeyframes });
       alert('Style saved!');
     } catch (err) {
       console.error('Save failed', err);
@@ -41,6 +43,15 @@ const StylePanel: React.FC<StylePanelProps> = ({ videoId }) => {
 
   if (loading) return <div style={{ textAlign: 'center', padding: '2rem', color: '#9ca3af' }}>Loading style...</div>;
   if (!style) return <div style={{ textAlign: 'center', padding: '2rem', color: '#9ca3af' }}>No style data</div>;
+
+  // Animation presets with preview descriptions
+  const animationPresets = [
+    { value: 'fade', label: 'Fade In/Out', preview: '↕️ Smooth fade' },
+    { value: 'slide-up', label: 'Slide Up', preview: '⬆️ Slides from bottom' },
+    { value: 'typewriter', label: 'Typewriter', preview: '⌨️ Letter by letter' },
+    { value: 'bounce', label: 'Bounce', preview: '🏀 Bouncy effect' },
+    { value: 'zoom-in', label: 'Zoom In', preview: '🔍 Zooms into view' }
+  ];
 
   return (
     <div className="card">
@@ -71,14 +82,34 @@ const StylePanel: React.FC<StylePanelProps> = ({ videoId }) => {
         <div>
           <label>Position</label>
           <select value={style.position} onChange={(e) => handleChange('position', e.target.value)}>
-            <option>bottom</option><option>top</option><option>center</option>
+            <option>bottom</option>
+            <option>top</option>
+            <option>center</option>
           </select>
         </div>
         <div>
-          <label>Animation</label>
+          <label>Animation Preset</label>
           <select value={style.animation} onChange={(e) => handleChange('animation', e.target.value)}>
-            <option>fade</option><option>slide</option><option>bounce</option><option>pop</option>
+            {animationPresets.map(preset => (
+              <option key={preset.value} value={preset.value}>{preset.label}</option>
+            ))}
           </select>
+          <small style={{ display: 'block', marginTop: '0.25rem', color: '#6b7280' }}>
+            {animationPresets.find(p => p.value === style.animation)?.preview}
+          </small>
+        </div>
+        <div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <input
+              type="checkbox"
+              checked={useKeyframes}
+              onChange={(e) => setUseKeyframes(e.target.checked)}
+            />
+            Enable keyframe animations (move/scale over time)
+          </label>
+          <small style={{ display: 'block', marginTop: '0.25rem', color: '#6b7280' }}>
+            Text will move across the screen during the caption duration
+          </small>
         </div>
       </div>
       <button onClick={handleSave} className="btn-primary" style={{ marginTop: '1.5rem' }}>Save Style</button>
