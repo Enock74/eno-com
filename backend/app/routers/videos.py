@@ -13,9 +13,11 @@ router = APIRouter(prefix="/videos", tags=["videos"])
 
 UPLOAD_DIR = "uploads"
 AUDIO_DIR = "uploads/audio"
+OUTPUT_DIR = "outputs"
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(AUDIO_DIR, exist_ok=True)
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 @router.post("/upload", response_model=schemas.VideoUploadResponse)
 async def upload_video(
@@ -41,7 +43,7 @@ async def upload_video(
         user_id=1,
         name=file.filename,
         file_path=video_path,
-        audio_path=audio_path,  # <-- added
+        audio_path=audio_path,
     )
     db.add(db_video)
     db.commit()
@@ -65,3 +67,11 @@ def get_audio(video_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Audio file missing")
     
     return FileResponse(video.audio_path, media_type="audio/wav", filename="audio.wav")
+
+# Output video endpoint for player timeline
+@router.get("/output/{filename}")
+def get_output_video(filename: str):
+    file_path = os.path.join(OUTPUT_DIR, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Video not found")
+    return FileResponse(file_path, media_type="video/mp4", filename=filename)

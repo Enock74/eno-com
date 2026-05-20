@@ -3,8 +3,11 @@ import VideoUpload from './components/VideoUpload';
 import CaptionTimeline from './components/CaptionTimeline';
 import StylePanel from './components/StylePanel';
 import ExportPanel from './components/ExportPanel';
+import PlayerTimeline from './components/PlayerTimeline';
 import { getCaptions } from './services/api';
 import './dark-theme.css';
+
+const API_BASE = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000';
 
 function App() {
   const getVideoIdFromUrl = () => {
@@ -16,6 +19,8 @@ function App() {
   const [videoId, setVideoId] = useState<number | null>(getVideoIdFromUrl());
   const [captionsReady, setCaptionsReady] = useState(false);
   const [polling, setPolling] = useState(false);
+  const [assembledVideoUrl, setAssembledVideoUrl] = useState<string | null>(null);
+  const [captions, setCaptions] = useState<any[]>([]);
 
   const updateVideoId = (id: number | null) => {
     setVideoId(id);
@@ -24,6 +29,11 @@ function App() {
     } else {
       window.history.pushState({}, '', window.location.pathname);
     }
+  };
+
+  const handleAssemblyComplete = (outputPath: string) => {
+    const filename = outputPath.split('\\').pop();
+    setAssembledVideoUrl(`${API_BASE}/videos/output/${filename}`);
   };
 
   useEffect(() => {
@@ -36,6 +46,7 @@ function App() {
       try {
         const res = await getCaptions(videoId);
         if (res.data && res.data.length > 0) {
+          setCaptions(res.data);
           setCaptionsReady(true);
           setPolling(false);
           return true;
@@ -65,6 +76,7 @@ function App() {
           const res = await getCaptions(videoId);
           if (res.data && res.data.length > 0) {
             clearInterval(pollInterval);
+            setCaptions(res.data);
             setCaptionsReady(true);
             setPolling(false);
           } else if (attempts >= maxAttempts) {
@@ -110,8 +122,16 @@ function App() {
             <>
               <CaptionTimeline videoId={videoId} />
               <StylePanel videoId={videoId} />
-              <ExportPanel videoId={videoId} />
+              <ExportPanel videoId={videoId} onAssemblyComplete={handleAssemblyComplete} />
             </>
+          )}
+          {assembledVideoUrl && captions.length > 0 && (
+            <PlayerTimeline 
+              videoUrl={assembledVideoUrl} 
+              captions={captions}
+              onTimeUpdate={(time) => console.log('Time:', time)}
+              onCaptionClick={(caption) => console.log('Caption clicked:', caption)}
+            />
           )}
         </>
       )}

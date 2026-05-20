@@ -3,6 +3,7 @@ import { assembleVideo } from '../services/api';
 
 interface ExportPanelProps {
   videoId: number;
+  onAssemblyComplete?: (filename: string) => void;
 }
 
 const transitionTypes = [
@@ -13,7 +14,7 @@ const transitionTypes = [
   { value: 'zoom', label: 'Zoom', preview: '🔍 Zoom transition' }
 ];
 
-const ExportPanel: React.FC<ExportPanelProps> = ({ videoId }) => {
+const ExportPanel: React.FC<ExportPanelProps> = ({ videoId, onAssemblyComplete }) => {
   const [assembling, setAssembling] = useState(false);
   const [outputPath, setOutputPath] = useState('');
   const [resolution, setResolution] = useState('1080p');
@@ -33,9 +34,14 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ videoId }) => {
         transition_type: transitionType,
         bitrate 
       });
-      setOutputPath(res.data.output_path);
-      alert('Assembly complete! Check console for path.');
-      console.log('Output video:', res.data.output_path);
+      const outputPath = res.data.output_path;
+      const filename = outputPath.split('\\').pop();
+      if (onAssemblyComplete) {
+        onAssemblyComplete(filename || '');
+      }
+      setOutputPath(outputPath);
+      alert('Assembly complete!');
+      console.log('Output video:', outputPath);
     } catch (err) {
       console.error('Assembly failed', err);
       alert('Assembly failed');
