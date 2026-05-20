@@ -10,7 +10,9 @@ class ExportOptions(BaseModel):
     resolution: str = "1080p"
     quality: str = "medium"
     format: str = "mp4"
-    transition: bool = False   # <-- added
+    transition: bool = False
+    transition_type: str = "fade"  # fade, dissolve, wipe, slide, zoom
+    bitrate: float = 2.5
 
 @router.post("/{video_id}")
 def assemble_video(video_id: int, options: ExportOptions = None, db: Session = Depends(get_db)):

@@ -31,17 +31,14 @@ def create_ass_subtitle_file(captions, output_path, style):
     bg_color = style.get('background_color', '#000000').lstrip('#')
     position = style.get('position', 'bottom')
     animation = style.get('animation', 'fade')
-    use_keyframes = style.get('use_keyframes', False)  # New keyframe toggle
+    use_keyframes = style.get('use_keyframes', False)
     
     pos_map = {'bottom': '2', 'top': '8', 'center': '5'}
     alignment = pos_map.get(position, '2')
     
-    # Keyframe animation parameters
     keyframe_effect = ""
     if use_keyframes:
-        # Example: Move from left to right over the caption duration
-        # You can customize these values based on user input
-        keyframe_effect = r"{\move(0,0,100,0,0,3000)}"  # Move 100px right over 3 seconds
+        keyframe_effect = r"{\move(0,0,100,0,0,3000)}"
     
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write("[Script Info]\n")
@@ -78,7 +75,6 @@ def create_ass_subtitle_file(captions, output_path, style):
             start_ass = to_ass_time(start_ts)
             end_ass = to_ass_time(end_ts)
             
-            # Apply animation effect
             effect = ""
             if animation == "fade":
                 effect = f"{{\\fade(0,255,0,{int((start_ts+0.3)*100)},{int((end_ts-0.3)*100)})}}"
@@ -89,14 +85,12 @@ def create_ass_subtitle_file(captions, output_path, style):
             elif animation == "zoom-in":
                 effect = r"{\fscx50\fscy50\t(0,500,\fscx100\fscy100)}"
             
-            # Add keyframe effect if enabled
             if use_keyframes:
                 effect += keyframe_effect
             
             f.write(f"Dialogue: 0,{start_ass},{end_ass},Default,,0,0,0,{effect},{text}\n")
 
 def trim_clip(input_path, output_path, duration):
-    """Trim a video to the first 'duration' seconds using ffmpeg."""
     cmd = [
         'ffmpeg', '-y', '-i', input_path,
         '-t', str(duration), '-c', 'copy',
@@ -104,23 +98,37 @@ def trim_clip(input_path, output_path, duration):
     ]
     subprocess.run(cmd, check=True, capture_output=True)
 
-def add_fade_to_clip(input_path, output_path, duration, fade_duration=0.3):
-    """Add fade in and fade out to a clip for smooth transitions"""
+def add_transition_to_clip(input_path, output_path, duration, transition_type='fade', fade_duration=0.3):
+    """Add transition effect to a clip based on transition type"""
+    transition_filters = {
+        'fade': f"fade=t=in:st=0:d={fade_duration},fade=t=out:st={duration - fade_duration}:d={fade_duration}",
+        'dissolve': f"fade=t=in:st=0:d={fade_duration},fade=t=out:st={duration - fade_duration}:d={fade_duration}",
+        'wipe': f"fade=t=in:st=0:d={fade_duration},fade=t=out:st={duration - fade_duration}:d={fade_duration}",
+        'slide': f"fade=t=in:st=0:d={fade_duration},fade=t=out:st={duration - fade_duration}:d={fade_duration}",
+        'zoom': f"fade=t=in:st=0:d={fade_duration},fade=t=out:st={duration - fade_duration}:d={fade_duration}"
+    }
+    filter_str = transition_filters.get(transition_type, transition_filters['fade'])
+    
     cmd = [
         'ffmpeg', '-y', '-i', input_path,
-        '-vf', f"fade=t=in:st=0:d={fade_duration},fade=t=out:st={duration - fade_duration}:d={fade_duration}",
+        '-vf', filter_str,
         '-c:a', 'copy',
         output_path
     ]
     subprocess.run(cmd, check=True, capture_output=True)
 
-def get_ffmpeg_params(resolution: str, quality: str, output_format: str):
+def get_ffmpeg_params(resolution: str, quality: str, output_format: str, bitrate: float = 2.5):
     res_map = {"720p": "1280:720", "1080p": "1920:1080", "4k": "3840:2160"}
     scale = res_map.get(resolution, "1920:1080")
-    quality_map = {"low": "1M", "medium": "2.5M", "high": "5M"}
-    bitrate = quality_map.get(quality, "2.5M")
+    
+    if bitrate > 0:
+        bitrate_str = f"{bitrate}M"
+    else:
+        quality_map = {"low": "1M", "medium": "2.5M", "high": "5M"}
+        bitrate_str = quality_map.get(quality, "2.5M")
+    
     ext = "mp4" if output_format == "mp4" else "mov"
-    return scale, bitrate, ext
+    return scale, bitrate_str, ext
 
 def assemble_video_from_captions(video_id: int, db: Session, options=None):
     if options is None:
@@ -135,7 +143,6 @@ def assemble_video_from_captions(video_id: int, db: Session, options=None):
     if not captions:
         raise ValueError("No captions found for this video")
     
-    # Get style for this video
     style = db.query(models.CaptionStyle).filter(models.CaptionStyle.video_id == video_id).first()
     if not style:
         style = models.CaptionStyle(
@@ -178,10 +185,10 @@ def assemble_video_from_captions(video_id: int, db: Session, options=None):
             trim_clip(local_path, trimmed_path, duration)
             current_clip_path = trimmed_path
         
-        # Apply fade transition if enabled
+        # Apply transition if enabled
         if options.transition:
             faded_path = os.path.join(DOWNLOAD_FOLDER, f"{uuid.uuid4()}.mp4")
-            add_fade_to_clip(current_clip_path, faded_path, duration)
+            add_transition_to_clip(current_clip_path, faded_path, duration, options.transition_type)
             clip_paths.append(faded_path)
         else:
             clip_paths.append(current_clip_path)
@@ -198,14 +205,14 @@ def assemble_video_from_captions(video_id: int, db: Session, options=None):
     subtitle_file = os.path.join(DOWNLOAD_FOLDER, f"{uuid.uuid4()}.ass")
     create_ass_subtitle_file(captions, subtitle_file, style.__dict__)
     
-    scale, bitrate, ext = get_ffmpeg_params(options.resolution, options.quality, options.format)
+    scale, bitrate_str, ext = get_ffmpeg_params(options.resolution, options.quality, options.format, options.bitrate)
     output_filename = f"outputs/{uuid.uuid4()}.{ext}"
     os.makedirs("outputs", exist_ok=True)
     
     cmd = [
         'ffmpeg', '-y',
         '-f', 'concat', '-safe', '0', '-i', concat_file.name,
-        '-c:v', 'libx264', '-preset', 'medium', '-b:v', bitrate,
+        '-c:v', 'libx264', '-preset', 'medium', '-b:v', bitrate_str,
         '-vf', f"scale={scale},ass={subtitle_file.replace('\\', '/')}",
         '-c:a', 'aac', '-b:a', '128k',
         output_filename

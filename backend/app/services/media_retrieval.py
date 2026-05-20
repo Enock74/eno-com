@@ -131,3 +131,31 @@ class MediaRetrievalService:
             "title": best.get("pageURL"),
             "metadata": best
         }
+
+    def search_with_thumbnails(self, query: str, media_type: str = "video", per_page: int = 5):
+        """Search and return media with thumbnail URLs"""
+        if media_type == "video":
+            results = self._search_pixabay_videos(query, per_page)
+            if not results:
+                results = self._search_pexels_videos(query, per_page)
+        else:
+            results = self._search_pixabay_images(query, per_page)
+        
+        items = []
+        for item in results:
+            if media_type == "video":
+                # Get thumbnail from video
+                thumb = item.get('videos', {}).get('small', {}).get('thumbnail') or item.get('videos', {}).get('medium', {}).get('thumbnail')
+                url = self._get_video_url(item, 'pixabay' if 'videos' in item else 'pexels')
+            else:
+                thumb = item.get('webformatURL') or item.get('previewURL')
+                url = self._get_image_url(item)
+            
+            items.append({
+                'id': item.get('id'),
+                'title': item.get('tags') or item.get('url'),
+                'thumbnail': thumb,
+                'url': url,
+                'duration': item.get('duration', 0) if media_type == 'video' else None
+            })
+        return items

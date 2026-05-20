@@ -3,8 +3,12 @@ from sqlalchemy.orm import Session
 from typing import List
 from .. import models, schemas
 from ..database import get_db
+from ..services.media_retrieval import MediaRetrievalService
 
 router = APIRouter(prefix="/clips", tags=["clips"])
+
+# Initialize media service
+media_service = MediaRetrievalService()
 
 @router.post("/", response_model=schemas.VideoClipResponse)
 def create_clip(clip: schemas.VideoClipCreate, db: Session = Depends(get_db)):
@@ -45,10 +49,18 @@ def delete_clip(clip_id: int, db: Session = Depends(get_db)):
     db.delete(db_clip)
     db.commit()
     return {"message": "Clip deleted"}
-    from ..services.clip_retrieval import find_best_clip
 
-@router.post("/search")
-def search_clip(caption_text: str, db: Session = Depends(get_db)):
+# Search for media from Pexels/Pixabay with thumbnails
+@router.get("/search")
+def search_media(q: str, media_type: str = "video", db: Session = Depends(get_db)):
+    """Search for media from Pexels/Pixabay with thumbnails"""
+    items = media_service.search_with_thumbnails(q, media_type)
+    return {"results": items}
+
+# Legacy search for local clips
+@router.post("/search/local")
+def search_local_clip(caption_text: str, db: Session = Depends(get_db)):
+    from ..services.clip_retrieval import find_best_clip
     clip = find_best_clip(db, caption_text)
     if not clip:
         return {"message": "No matching clip found"}

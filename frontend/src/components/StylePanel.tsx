@@ -15,24 +15,87 @@ interface StylePanelProps {
   videoId: number;
 }
 
+// Title templates with preview descriptions
+const titleTemplates = [
+  { 
+    name: 'Simple', 
+    font: 'Arial', 
+    font_size: 24, 
+    font_color: '#FFFFFF', 
+    background_color: '#000000', 
+    position: 'bottom',
+    description: 'Classic white text on black background'
+  },
+  { 
+    name: 'Bold', 
+    font: 'Impact', 
+    font_size: 36, 
+    font_color: '#FFD700', 
+    background_color: '#000000', 
+    position: 'bottom',
+    description: 'Bold gold text for emphasis'
+  },
+  { 
+    name: 'Elegant', 
+    font: 'Georgia', 
+    font_size: 28, 
+    font_color: '#FF69B4', 
+    background_color: 'transparent', 
+    position: 'center',
+    description: 'Pink elegant text without background'
+  },
+  { 
+    name: 'Modern', 
+    font: 'Verdana', 
+    font_size: 22, 
+    font_color: '#00FFFF', 
+    background_color: '#1a1a2e', 
+    position: 'top',
+    description: 'Cyan text with dark blue background'
+  },
+  { 
+    name: 'News Lower Third', 
+    font: 'Arial', 
+    font_size: 28, 
+    font_color: '#FFFFFF', 
+    background_color: '#2563eb', 
+    position: 'bottom',
+    description: 'Blue lower third style for news'
+  },
+  { 
+    name: 'Cinematic', 
+    font: 'Times New Roman', 
+    font_size: 32, 
+    font_color: '#FFFFFF', 
+    background_color: '#000000', 
+    position: 'bottom',
+    description: 'Classic cinematic subtitle style'
+  },
+  { 
+    name: 'Neon Glow', 
+    font: 'Impact', 
+    font_size: 40, 
+    font_color: '#00FF00', 
+    background_color: '#000000', 
+    position: 'center',
+    description: 'Green neon glow effect'
+  }
+];
+
 const StylePanel: React.FC<StylePanelProps> = ({ videoId }) => {
   const [style, setStyle] = useState<Style | null>(null);
   const [loading, setLoading] = useState(true);
   const [useKeyframes, setUseKeyframes] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState('');
 
   useEffect(() => {
     const fetchStyle = async () => {
       try {
-        setLoading(true);
-        setError(null);
         const res = await getStyle(videoId);
-        console.log('Style data received:', res.data);
         setStyle(res.data);
         setUseKeyframes(res.data?.use_keyframes || false);
       } catch (err) {
         console.error('Failed to fetch style', err);
-        setError('Could not load style. Please try again.');
       } finally {
         setLoading(false);
       }
@@ -49,10 +112,24 @@ const StylePanel: React.FC<StylePanelProps> = ({ videoId }) => {
     if (!style) return;
     try {
       await updateStyle(videoId, { ...style, use_keyframes: useKeyframes });
-      alert('Style saved successfully!');
+      alert('Style saved!');
     } catch (err) {
       console.error('Save failed', err);
-      alert('Failed to save style');
+    }
+  };
+
+  const applyTemplate = (templateName: string) => {
+    const template = titleTemplates.find(t => t.name === templateName);
+    if (template && style) {
+      setStyle({
+        ...style,
+        font: template.font,
+        font_size: template.font_size,
+        font_color: template.font_color,
+        background_color: template.background_color,
+        position: template.position
+      });
+      setSelectedTemplate(templateName);
     }
   };
 
@@ -65,12 +142,12 @@ const StylePanel: React.FC<StylePanelProps> = ({ videoId }) => {
     );
   }
 
-  if (error || !style) {
+  if (!style) {
     return (
       <div className="card">
         <h2 className="card-title">Caption Style</h2>
         <div style={{ textAlign: 'center', padding: '2rem', color: '#9ca3af' }}>
-          {error || 'No style data available. Upload a new video to create default style.'}
+          Upload a new video to see style options
         </div>
       </div>
     );
@@ -86,6 +163,27 @@ const StylePanel: React.FC<StylePanelProps> = ({ videoId }) => {
   return (
     <div className="card">
       <h2 className="card-title">Caption Style</h2>
+      
+      {/* Title Templates Dropdown */}
+      <div className="mb-4">
+        <label>Title Templates</label>
+        <select 
+          value={selectedTemplate} 
+          onChange={(e) => applyTemplate(e.target.value)}
+          style={{ marginBottom: '0.25rem', width: '100%', padding: '0.5rem', borderRadius: '0.5rem' }}
+        >
+          <option value="">-- Select a template --</option>
+          {titleTemplates.map(template => (
+            <option key={template.name} value={template.name}>{template.name}</option>
+          ))}
+        </select>
+        {selectedTemplate && (
+          <small style={{ display: 'block', marginTop: '0.25rem', color: '#6b7280' }}>
+            {titleTemplates.find(t => t.name === selectedTemplate)?.description}
+          </small>
+        )}
+      </div>
+      
       <div className="grid-2">
         <div>
           <label>Font</label>

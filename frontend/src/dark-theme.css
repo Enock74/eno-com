@@ -117,3 +117,13 @@ label {
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 1rem;
 }
+
+/* Transition Preview Animation */
+@keyframes pulse {
+  0% { opacity: 0.5; transform: scale(0.95); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.transition-preview {
+  animation: pulse 0.5s ease;
+}

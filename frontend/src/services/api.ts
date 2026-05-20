@@ -33,9 +33,15 @@ export const reorderCaptions = (videoId: number, captionIds: number[]) =>
 export const getStyle = (videoId: number) => api.get(`/styles/${videoId}`);
 export const updateStyle = (videoId: number, style: any) => api.post(`/styles/${videoId}`, style);
 
-// Assembly with export options (including transition)
-export const assembleVideo = (videoId: number, options?: { resolution?: string; quality?: string; format?: string; transition?: boolean }) =>
-  api.post(`/assembly/${videoId}`, options || {});
+// Assembly with export options (including transition and transition_type)
+export const assembleVideo = (videoId: number, options?: { 
+  resolution?: string; 
+  quality?: string; 
+  format?: string; 
+  transition?: boolean;
+  transition_type?: string;
+  bitrate?: number 
+}) => api.post(`/assembly/${videoId}`, options || {});
 
 // Audio for waveform
 export const getAudioUrl = (videoId: number) => api.get(`/videos/${videoId}/audio`, { responseType: 'blob' });

@@ -3,6 +3,7 @@ import { Caption } from '../types';
 import { getCaptions, updateCaption, splitCaption, mergeCaptions, deleteCaption, reorderCaptions } from '../services/api';
 import { getAudioStreamUrl } from '../services/api';
 import VisualTimeline from './VisualTimeline';
+import MediaPreview from './MediaPreview';
 // import AudioWaveform from './AudioWaveform';  // Temporarily disabled
 
 interface CaptionTimelineProps {
@@ -16,6 +17,7 @@ const CaptionTimeline: React.FC<CaptionTimelineProps> = ({ videoId }) => {
   const [editText, setEditText] = useState('');
   const [videoDuration, setVideoDuration] = useState(300); // default 5 min, will update from captions
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [playheadTime, setPlayheadTime] = useState<number | null>(null);
 
   const fetchCaptions = useCallback(async () => {
     setLoading(true);
@@ -43,6 +45,37 @@ const CaptionTimeline: React.FC<CaptionTimelineProps> = ({ videoId }) => {
       setAudioUrl(getAudioStreamUrl(videoId));
     }
   }, [videoId]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+S - Save current edit
+      if ((e.ctrlKey || e.metaKey) && e.key === 's' && editingId) {
+        e.preventDefault();
+        handleUpdate(editingId);
+      }
+      // Delete - Delete selected caption
+      if (e.key === 'Delete' && editingId) {
+        e.preventDefault();
+        // eslint-disable-next-line no-restricted-globals
+        if (confirm('Delete this caption?')) {
+          handleDelete(editingId);
+          setEditingId(null);
+        }
+      }
+      // Escape - Cancel editing
+      if (e.key === 'Escape' && editingId) {
+        e.preventDefault();
+        setEditingId(null);
+        setEditText('');
+      }
+      // Ctrl+Z - Undo (future)
+      // Ctrl+Shift+Z - Redo (future)
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [editingId, editText]);
 
   const handleUpdate = async (id: number) => {
     if (!editText.trim()) return;
@@ -125,6 +158,42 @@ const CaptionTimeline: React.FC<CaptionTimelineProps> = ({ videoId }) => {
     }
   };
 
+  // Handle cut at playhead position
+  const handleCutAtPlayhead = () => {
+    if (playheadTime === null) {
+      alert('Please play/pause the audio to set a cut position');
+      return;
+    }
+    
+    // Find the caption that contains this time
+    const caption = captions.find(cap => 
+      playheadTime >= cap.start_time && playheadTime <= cap.end_time
+    );
+    
+    if (!caption) {
+      alert('No caption found at this position');
+      return;
+    }
+    
+    // Split the caption at the playhead time
+    // eslint-disable-next-line no-restricted-globals
+    if (confirm(`Split caption at ${playheadTime.toFixed(2)}s?`)) {
+      (async () => {
+        try {
+          await splitCaption(caption.id, playheadTime);
+          fetchCaptions();
+        } catch (err) {
+          console.error('Cut failed', err);
+        }
+      })();
+    }
+  };
+
+  // Update audio player time
+  const handleAudioTimeUpdate = (e: React.SyntheticEvent<HTMLAudioElement>) => {
+    setPlayheadTime(e.currentTarget.currentTime);
+  };
+
   if (loading) return <div style={{ textAlign: 'center', padding: '2rem', color: '#9ca3af' }}>Loading captions...</div>;
 
   return (
@@ -143,11 +212,30 @@ const CaptionTimeline: React.FC<CaptionTimelineProps> = ({ videoId }) => {
         </div>
       )}
       
-      {/* Audio Preview - Simple audio player */}
+      {/* Audio Preview with Cut button */}
       {audioUrl && (
         <div className="mb-4">
           <label className="block text-sm text-gray-400 mb-1">Audio Preview</label>
-          <audio controls src={audioUrl} style={{ width: '100%' }} />
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <audio 
+              controls 
+              src={audioUrl} 
+              style={{ flex: 1 }} 
+              onTimeUpdate={handleAudioTimeUpdate}
+            />
+            <button 
+              onClick={handleCutAtPlayhead}
+              className="btn-primary"
+              style={{ background: '#dc2626', padding: '0.5rem 1rem' }}
+            >
+              ✂️ Cut at Playhead
+            </button>
+          </div>
+          {playheadTime !== null && (
+            <div className="text-xs text-gray-400 mt-1">
+              Cut position: {playheadTime.toFixed(2)}s
+            </div>
+          )}
         </div>
       )}
       
@@ -169,6 +257,10 @@ const CaptionTimeline: React.FC<CaptionTimelineProps> = ({ videoId }) => {
                   <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
                     <button onClick={() => { setEditingId(cap.id); setEditText(cap.text); }} style={{ background: 'none', border: 'none', color: '#60a5fa', cursor: 'pointer', fontSize: '1.2rem' }} title="Edit">✏️</button>
                     <button onClick={() => handleSplit(cap.id, cap.start_time, cap.end_time)} style={{ background: 'none', border: 'none', color: '#facc15', cursor: 'pointer', fontSize: '1.2rem' }} title="Split">✂️</button>
+                    <MediaPreview 
+                      captionText={cap.text} 
+                      onSelect={(url) => console.log('Selected URL:', url)} 
+                    />
                     {idx > 0 && (
                       <button onClick={() => handleMerge(captions[idx-1].id, cap.id)} style={{ background: 'none', border: 'none', color: '#a855f7', cursor: 'pointer', fontSize: '1.2rem' }} title="Merge">🔗</button>
                     )}
