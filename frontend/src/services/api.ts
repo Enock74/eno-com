@@ -25,6 +25,10 @@ export const mergeCaptions = (captionId1: number, captionId2: number) =>
   api.post('/captions/merge', { caption_id1: captionId1, caption_id2: captionId2 });
 export const deleteCaption = (captionId: number) => api.delete(`/captions/${captionId}`);
 
+// Reorder captions (drag and drop)
+export const reorderCaptions = (videoId: number, captionIds: number[]) =>
+  api.post('/captions/reorder', { video_id: videoId, caption_ids: captionIds });
+
 // Styles
 export const getStyle = (videoId: number) => api.get(`/styles/${videoId}`);
 export const updateStyle = (videoId: number, style: any) => api.post(`/styles/${videoId}`, style);

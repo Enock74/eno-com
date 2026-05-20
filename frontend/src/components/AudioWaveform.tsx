@@ -17,6 +17,19 @@ const AudioWaveform: React.FC<AudioWaveformProps> = ({ audioUrl, onReady, onSeek
     let isMounted = true;
     const container = containerRef.current;
 
+    // Clean up previous instance
+    if (wavesurferRef.current) {
+      try {
+        wavesurferRef.current.destroy();
+      } catch (err) {
+        console.error('Error destroying previous wavesurfer:', err);
+      }
+      wavesurferRef.current = null;
+    }
+
+    // Clear container inner HTML to remove any leftover canvas elements
+    container.innerHTML = '';
+
     const initWaveSurfer = async () => {
       try {
         wavesurferRef.current = WaveSurfer.create({
@@ -70,7 +83,7 @@ const AudioWaveform: React.FC<AudioWaveformProps> = ({ audioUrl, onReady, onSeek
     };
   }, [audioUrl]);
 
-  return <div ref={containerRef} style={{ width: '100%' }} />;
+  return <div ref={containerRef} style={{ width: '100%', minHeight: '80px' }} />;
 };
 
 export default AudioWaveform;

@@ -1,238 +1,189 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  horizontalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Caption } from '../types';
+
+interface SortableItemProps {
+  caption: Caption;
+  pixelsPerSecond: number;
+  onCaptionClick: (caption: Caption) => void;
+}
+
+const SortableItem: React.FC<SortableItemProps> = ({ 
+  caption, 
+  pixelsPerSecond, 
+  onCaptionClick 
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: caption.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    position: 'absolute' as const,
+    left: caption.start_time * pixelsPerSecond,
+    width: Math.max((caption.end_time - caption.start_time) * pixelsPerSecond, 30),
+    minWidth: '30px',
+    height: '50px',
+    backgroundColor: isDragging ? '#3b82f6' : '#2563eb',
+    borderRadius: '6px',
+    cursor: 'grab',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '10px',
+    color: 'white',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    padding: '0 4px',
+    top: '5px',
+    zIndex: isDragging ? 1000 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} onClick={() => onCaptionClick(caption)}>
+      {caption.text.substring(0, 20)}
+    </div>
+  );
+};
 
 interface VisualTimelineProps {
   captions: Caption[];
   videoDuration: number;
   onCaptionClick: (caption: Caption) => void;
-  onCaptionResize: (captionId: number, newStart: number, newEnd: number) => void;
-  onCaptionDrag: (captionId: number, newStart: number) => void;
+  onReorderCaptions: (captionIds: number[]) => void;
 }
 
 const VisualTimeline: React.FC<VisualTimelineProps> = ({
   captions,
   videoDuration,
   onCaptionClick,
-  onCaptionResize,
-  onCaptionDrag
+  onReorderCaptions,
 }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [dragging, setDragging] = useState<{ id: number; type: 'move' | 'resize-left' | 'resize-right'; startX: number; originalStart: number; originalEnd: number } | null>(null);
-  const [hoveredCaption, setHoveredCaption] = useState<number | null>(null);
-
-  const pixelsPerSecond = (canvasWidth: number) => canvasWidth / videoDuration;
-
-  const drawTimeline = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const width = canvas.width;
-    const height = canvas.height;
-    const pps = pixelsPerSecond(width);
-
-    // Clear canvas
-    ctx.clearRect(0, 0, width, height);
-
-    // Draw background grid (seconds)
-    ctx.strokeStyle = '#374151';
-    ctx.lineWidth = 1;
-    ctx.fillStyle = '#9ca3af';
-    ctx.font = '10px monospace';
-    
-    for (let s = 0; s <= videoDuration; s += 5) {
-      const x = s * pps;
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, height);
-      ctx.stroke();
-      ctx.fillText(`${s}s`, x + 2, 12);
-    }
-
-    // Draw captions as bars
-    captions.forEach(cap => {
-      const x = cap.start_time * pps;
-      const w = (cap.end_time - cap.start_time) * pps;
-      const y = 20;
-      const h = height - 40;
-      
-      // Highlight hovered caption
-      if (hoveredCaption === cap.id) {
-        ctx.fillStyle = '#3b82f6';
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = '#60a5fa';
-      } else {
-        ctx.fillStyle = '#1e40af';
-        ctx.shadowBlur = 0;
-      }
-      
-      ctx.fillRect(x, y, w, h);
-      
-      // Draw border
-      ctx.strokeStyle = '#60a5fa';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(x, y, w, h);
-      
-      // Draw resize handles
-      ctx.fillStyle = '#facc15';
-      ctx.fillRect(x - 3, y + h/2 - 5, 6, 10);
-      ctx.fillRect(x + w - 3, y + h/2 - 5, 6, 10);
-      
-      // Draw text (if enough space)
-      if (w > 50) {
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '10px sans-serif';
-        ctx.fillText(cap.text.substring(0, 20), x + 5, y + h/2 + 3);
-      }
-    });
-  };
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [timelineWidth, setTimelineWidth] = useState(800);
+  const [zoomLevel, setZoomLevel] = useState(1);
 
   useEffect(() => {
-    drawTimeline();
-  }, [captions, videoDuration, hoveredCaption]);
+    if (containerRef.current) {
+      setTimelineWidth(containerRef.current.clientWidth);
+    }
+  }, []);
 
-  // Handle mouse events for dragging/resizing
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const pps = pixelsPerSecond(canvas.width);
-    const timeAtX = mouseX / pps;
-    
-    // Find which caption and handle (left, right, or body)
-    for (let i = captions.length - 1; i >= 0; i--) {
-      const cap = captions[i];
-      const left = cap.start_time * pps;
-      const right = cap.end_time * pps;
-      const handleSize = 6;
-      
-      // Check resize handles
-      if (Math.abs(mouseX - left) < handleSize) {
-        setDragging({
-          id: cap.id,
-          type: 'resize-left',
-          startX: mouseX,
-          originalStart: cap.start_time,
-          originalEnd: cap.end_time
-        });
-        return;
-      }
-      if (Math.abs(mouseX - right) < handleSize) {
-        setDragging({
-          id: cap.id,
-          type: 'resize-right',
-          startX: mouseX,
-          originalStart: cap.start_time,
-          originalEnd: cap.end_time
-        });
-        return;
-      }
-      
-      // Check body for drag
-      if (mouseX >= left && mouseX <= right) {
-        setDragging({
-          id: cap.id,
-          type: 'move',
-          startX: mouseX,
-          originalStart: cap.start_time,
-          originalEnd: cap.end_time
-        });
-        onCaptionClick(cap);
-        return;
-      }
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const pixelsPerSecond = (timelineWidth * zoomLevel) / videoDuration;
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (active.id !== over?.id) {
+      const oldIndex = captions.findIndex((c) => c.id === active.id);
+      const newIndex = captions.findIndex((c) => c.id === over?.id);
+      const newOrder = arrayMove(captions, oldIndex, newIndex);
+      onReorderCaptions(newOrder.map(c => c.id));
     }
   };
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!dragging) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const pps = pixelsPerSecond(canvas.width);
-    const deltaTime = (mouseX - dragging.startX) / pps;
-    
-    if (dragging.type === 'move') {
-      const newStart = Math.max(0, dragging.originalStart + deltaTime);
-      const duration = dragging.originalEnd - dragging.originalStart;
-      const newEnd = Math.min(videoDuration, newStart + duration);
-      onCaptionDrag(dragging.id, newStart);
-      // Update end as well to maintain duration
-      onCaptionResize(dragging.id, newStart, newEnd);
-    } else if (dragging.type === 'resize-left') {
-      let newStart = Math.max(0, dragging.originalStart + deltaTime);
-      if (newStart >= dragging.originalEnd) newStart = dragging.originalEnd - 0.1;
-      onCaptionResize(dragging.id, newStart, dragging.originalEnd);
-    } else if (dragging.type === 'resize-right') {
-      let newEnd = Math.min(videoDuration, dragging.originalEnd + deltaTime);
-      if (newEnd <= dragging.originalStart) newEnd = dragging.originalStart + 0.1;
-      onCaptionResize(dragging.id, dragging.originalStart, newEnd);
-    }
-  };
+  const handleZoomIn = () => setZoomLevel(prev => Math.min(prev * 1.5, 5));
+  const handleZoomOut = () => setZoomLevel(prev => Math.max(prev / 1.5, 0.5));
 
-  const handleMouseUp = () => {
-    setDragging(null);
-  };
-
-  const handleMouseMoveForHover = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const pps = pixelsPerSecond(canvas.width);
-    const timeAtX = mouseX / pps;
-    
-    let found = null;
-    for (const cap of captions) {
-      if (timeAtX >= cap.start_time && timeAtX <= cap.end_time) {
-        found = cap.id;
-        break;
-      }
-    }
-    setHoveredCaption(found);
-  };
-
-  // Resize canvas when window changes
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const resizeObserver = new ResizeObserver(() => {
-      const parent = canvas.parentElement;
-      if (parent) {
-        canvas.width = parent.clientWidth;
-        canvas.height = 120;
-        drawTimeline();
-      }
-    });
-    if (canvas.parentElement) {
-      resizeObserver.observe(canvas.parentElement);
-    }
-    return () => resizeObserver.disconnect();
-  }, [captions, videoDuration]);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (canvas && canvas.parentElement) {
-      canvas.width = canvas.parentElement.clientWidth;
-      canvas.height = 120;
-      drawTimeline();
-    }
-  }, [captions, videoDuration]);
+  const totalWidth = videoDuration * pixelsPerSecond;
 
   return (
-    <canvas
-      ref={canvasRef}
-      style={{ width: '100%', height: '120px', cursor: dragging ? 'grabbing' : 'pointer', backgroundColor: '#0f172a', borderRadius: '8px' }}
-      onMouseDown={handleMouseDown}
-      onMouseMove={(e) => {
-        handleMouseMove(e);
-        handleMouseMoveForHover(e);
-      }}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-    />
+    <div>
+      {/* Zoom controls */}
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+        <button onClick={handleZoomIn} className="btn-primary" style={{ padding: '0.25rem 0.5rem' }}>Zoom In +</button>
+        <button onClick={handleZoomOut} className="btn-primary" style={{ padding: '0.25rem 0.5rem' }}>Zoom Out -</button>
+        <span style={{ fontSize: '0.8rem', color: '#9ca3af' }}>{Math.round(zoomLevel * 100)}%</span>
+      </div>
+
+      <div
+        ref={containerRef}
+        style={{
+          width: '100%',
+          overflowX: 'auto',
+          backgroundColor: '#0f172a',
+          borderRadius: '8px',
+          padding: '8px 0',
+        }}
+      >
+        <div style={{ width: totalWidth, position: 'relative', minHeight: '80px' }}>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={captions.map(c => c.id)}
+              strategy={horizontalListSortingStrategy}
+            >
+              {captions.map((caption) => (
+                <SortableItem
+                  key={caption.id}
+                  caption={caption}
+                  pixelsPerSecond={pixelsPerSecond}
+                  onCaptionClick={onCaptionClick}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
+
+          {/* Time ruler */}
+          <div
+            style={{
+              position: 'absolute',
+              bottom: '-20px',
+              left: 0,
+              right: 0,
+              display: 'flex',
+              fontSize: '10px',
+              color: '#9ca3af',
+            }}
+          >
+            {Array.from({ length: Math.floor(videoDuration / 10) + 1 }, (_, i) => (
+              <div
+                key={i}
+                style={{
+                  position: 'absolute',
+                  left: `${i * 10 * pixelsPerSecond}px`,
+                  transform: 'translateX(-50%)',
+                }}
+              >
+                {i * 10}s
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
 

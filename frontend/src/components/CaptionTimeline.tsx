@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Caption } from '../types';
-import { getCaptions, updateCaption, splitCaption, mergeCaptions, deleteCaption } from '../services/api';
+import { getCaptions, updateCaption, splitCaption, mergeCaptions, deleteCaption, reorderCaptions } from '../services/api';
 import { getAudioStreamUrl } from '../services/api';
 import VisualTimeline from './VisualTimeline';
-import AudioWaveform from './AudioWaveform';
+// import AudioWaveform from './AudioWaveform';  // Temporarily disabled
 
 interface CaptionTimelineProps {
   videoId: number;
@@ -116,6 +116,15 @@ const CaptionTimeline: React.FC<CaptionTimelineProps> = ({ videoId }) => {
     setEditText(caption.text);
   };
 
+  const handleReorderCaptions = async (captionIds: number[]) => {
+    try {
+      await reorderCaptions(videoId, captionIds);
+      fetchCaptions();
+    } catch (err) {
+      console.error('Reorder failed', err);
+    }
+  };
+
   if (loading) return <div style={{ textAlign: 'center', padding: '2rem', color: '#9ca3af' }}>Loading captions...</div>;
 
   return (
@@ -129,20 +138,16 @@ const CaptionTimeline: React.FC<CaptionTimelineProps> = ({ videoId }) => {
             captions={captions}
             videoDuration={videoDuration}
             onCaptionClick={handleCaptionClick}
-            onCaptionResize={handleCaptionResize}
-            onCaptionDrag={handleCaptionDrag}
+            onReorderCaptions={handleReorderCaptions}
           />
         </div>
       )}
       
-      {/* Audio Waveform */}
+      {/* Audio Preview - Simple audio player */}
       {audioUrl && (
         <div className="mb-4">
-          <label className="block text-sm text-gray-400 mb-1">Audio Waveform</label>
-          <AudioWaveform 
-            audioUrl={audioUrl} 
-            onSeek={(time) => console.log('Seek to', time)} 
-          />
+          <label className="block text-sm text-gray-400 mb-1">Audio Preview</label>
+          <audio controls src={audioUrl} style={{ width: '100%' }} />
         </div>
       )}
       

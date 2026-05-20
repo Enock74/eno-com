@@ -7,7 +7,6 @@ import { getCaptions } from './services/api';
 import './dark-theme.css';
 
 function App() {
-  // Read videoId from URL if present
   const getVideoIdFromUrl = () => {
     const params = new URLSearchParams(window.location.search);
     const id = params.get('videoId');
@@ -18,7 +17,6 @@ function App() {
   const [captionsReady, setCaptionsReady] = useState(false);
   const [polling, setPolling] = useState(false);
 
-  // Update URL when videoId changes
   const updateVideoId = (id: number | null) => {
     setVideoId(id);
     if (id) {
@@ -34,7 +32,6 @@ function App() {
       return;
     }
     
-    // Check if captions already exist
     const checkCaptions = async () => {
       try {
         const res = await getCaptions(videoId);
@@ -57,12 +54,11 @@ function App() {
         return;
       }
 
-      // No captions yet – start polling
       setCaptionsReady(false);
       setPolling(true);
 
       let attempts = 0;
-      const maxAttempts = 300; // 300 * 5 seconds = 25 minutes max wait
+      const maxAttempts = 300;
       const pollInterval = setInterval(async () => {
         attempts++;
         try {

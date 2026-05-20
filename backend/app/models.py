@@ -30,6 +30,7 @@ class Caption(Base):
     start_time = Column(Float)
     end_time = Column(Float)
     text = Column(Text)
+    order_index = Column(Integer, default=0)  # <-- ADDED for drag-and-drop reordering
     video = relationship("Video", back_populates="captions")
     translations = relationship("TranslatedCaption", back_populates="caption")
 
@@ -53,7 +54,7 @@ class CaptionStyle(Base):
     background_color = Column(String, default="#000000")
     position = Column(String, default="bottom")
     animation = Column(String, default="fade")
-    use_keyframes = Column(Boolean, default=False)  # <-- ADDED
+    use_keyframes = Column(Boolean, default=False)
     video = relationship("Video", back_populates="style")
 
 class TranslatedCaption(Base):

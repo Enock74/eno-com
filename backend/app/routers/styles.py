@@ -9,17 +9,20 @@ router = APIRouter(prefix="/styles", tags=["styles"])
 def get_style(video_id: int, db: Session = Depends(get_db)):
     style = db.query(models.CaptionStyle).filter(models.CaptionStyle.video_id == video_id).first()
     if not style:
-        # Return default style if not set
-        return schemas.CaptionStyleResponse(
-            id=0,
+        # Auto-create a default style
+        style = models.CaptionStyle(
             video_id=video_id,
             font="Arial",
             font_size=24,
             font_color="#FFFFFF",
             background_color="#000000",
             position="bottom",
-            animation="fade"
+            animation="fade",
+            use_keyframes=False
         )
+        db.add(style)
+        db.commit()
+        db.refresh(style)
     return style
 
 @router.post("/{video_id}", response_model=schemas.CaptionStyleResponse)
